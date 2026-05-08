@@ -57,7 +57,12 @@ class MemgraphClient:
         results = list(self.mg.execute_and_fetch(query, {'from_id': from_id, 'to_id': to_id}))
         return results[0]['deleted'] > 0 if results else False
     
-   
+    def get_all_nodes(self) -> List[dict]:
+        """Получить все узлы"""
+        query = "MATCH (n:Word) RETURN n {.id} as node"
+        results = list(self.mg.execute_and_fetch(query))
+        return [r['node'] for r in results if r['node']]
+    
     def update_node(self, old_id: str, new_id: str) -> bool:
         """Обновить ID узла"""
         query = "MATCH (n:Word {id: $old_id}) SET n.id = $new_id RETURN n"
