@@ -1,4 +1,3 @@
-# api/views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -44,7 +43,6 @@ def add_edge(request):
         return Response({"status": "ok", "from": from_id, "to": to_id, "relation": relation})
     return Response({"error": "Failed to create edge"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# Добавь эти методы для полноценной работы:
 
 @api_view(['DELETE'])
 def delete_node(request, node_id):
@@ -90,7 +88,6 @@ def update_node(request, node_id):
 def init_mock_data(request):
     """POST /api/init-mock/ - загрузить мок-данные в Memgraph"""
     
-    # Твои мок-данные
     mock_data = {
         "k1": {"id": "k1", "neighbors": [{"id": "k2", "label": "гипоним"}, {"id": "k3", "label": "синоним"}, {"id": "k4", "label": "антоним"}, {"id": "k15", "label": "мероним"}, {"id": "k16", "label": "голоним"}]},
         "k2": {"id": "k2", "neighbors": [{"id": "k5", "label": "пример"}, {"id": "k6", "label": "часть"}, {"id": "k1", "label": "гипероним"}]},
@@ -125,14 +122,11 @@ def init_mock_data(request):
     }
     
     try:
-        # 1. Очищаем БД
         client.mg.execute("MATCH (n) DETACH DELETE n")
         
-        # 2. Создаем все узлы
         for node_id in mock_data.keys():
             client.mg.execute("CREATE (n:Word {id: $id})", {'id': node_id})
         
-        # 3. Создаем все связи
         for node_id, node_info in mock_data.items():
             for neighbor in node_info['neighbors']:
                 query = f"""
@@ -145,7 +139,6 @@ def init_mock_data(request):
                     'to_id': neighbor['id']
                 })
         
-        # 4. Проверяем результат
         result = list(client.mg.execute_and_fetch("MATCH (n:Word) RETURN count(n) as count"))[0]
         
         return Response({
