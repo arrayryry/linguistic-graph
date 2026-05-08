@@ -32,7 +32,7 @@
 
 Клонируйте репозиторий:
 ```bash
-git clone https://github.com/aaghTT/linguistic-graph.git
+git clone https://github.com/arrayruru/linguistic-graph.git
 cd linguistic-graph/frontend
 ```
 
@@ -68,15 +68,20 @@ python load_mock_data.py
 
 Базовый URL: `http://localhost:8000/api/`
 
-### Узлы
+## API Эндпоинты
 
-| Метод | Эндпоинт | Описание | Пример тела запроса |
-|-------|----------|----------|---------------------|
-| GET | `/node/<id>` | Получить узел с соседями | - |
-| GET | `/nodes` | Получить все узлы | - |
-| POST | `/node` | Создать узел | `{"id": "слово"}` |
-| PUT | `/node/<id>` | Обновить узел | `{"new_id": "новое_слово"}` |
-| DELETE | `/node/<id>` | Удалить узел | - |
+Базовый URL: `http://localhost:8000/api/`
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| GET | `/node/<str:node_id>` | Получить узел с соседями |
+| POST | `/node` | Создать узел |
+| GET | `/nodes` | Получить все узлы |
+| PUT | `/node/<str:node_id>/update` | Обновить узел |
+| DELETE | `/node/<str:node_id>/delete` | Удалить узел |
+| POST | `/edge` | Создать связь |
+| DELETE | `/edge/delete` | Удалить связь |
+| POST | `/init-mock/` | Загрузить тестовые данные |
 
 ### Связи
 
