@@ -90,9 +90,8 @@ python load_mock_data.py
 | POST | `/init-mock` | Загрузить тестовые данные |
 
 ## Автор
-
--aaghTT frontend
--arrayryry backend
+- aaghTT frontend
+- arrayryry backend
 
 ## Лицензия
 
