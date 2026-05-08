@@ -91,8 +91,8 @@ python load_mock_data.py
 
 ## Автор
 
-aaghTT frontend
-arrayryry backend
+-aaghTT frontend
+-arrayryry backend
 
 ## Лицензия
 
