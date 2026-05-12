@@ -15,6 +15,9 @@ class MemgraphClient:
             id: n.id,
             rus_word: n.rus_word,
             eng_word: n.eng_word,
+            node_type: n.node_type,
+            subtype: n.subtype,
+            semantic_role: n.semantic_role,
             neighbors: COLLECT(DISTINCT {
                 id: neighbor.id,
                 label: TYPE(r)
@@ -26,13 +29,28 @@ class MemgraphClient:
             return results[0]['result']
         return None
     
-    def add_node(self, node_id: str, rus_word: str = "", eng_word: str = "") -> bool:
-        """Создать узел с русским и английским словом"""
+    def add_node(self, node_id: str, rus_word: str = "", eng_word: str = "", 
+                 node_type: str = "OBJECT", subtype: str = "", semantic_role: str = "") -> bool:
+        """Создать узел с типом, подтипом и семантической ролью"""
         query = """
-        CREATE (n:Word {id: $id, rus_word: $rus_word, eng_word: $eng_word})
+        CREATE (n:Word {
+            id: $id, 
+            rus_word: $rus_word, 
+            eng_word: $eng_word,
+            node_type: $node_type,
+            subtype: $subtype,
+            semantic_role: $semantic_role
+        })
         RETURN n
         """
-        self.mg.execute(query, {'id': node_id, 'rus_word': rus_word, 'eng_word': eng_word})
+        self.mg.execute(query, {
+            'id': node_id, 
+            'rus_word': rus_word, 
+            'eng_word': eng_word,
+            'node_type': node_type,
+            'subtype': subtype,
+            'semantic_role': semantic_role
+        })
         return True
     
     def get_all_nodes(self) -> List[dict]:
@@ -42,14 +60,19 @@ class MemgraphClient:
         RETURN {
             id: n.id, 
             rus_word: n.rus_word, 
-            eng_word: n.eng_word
+            eng_word: n.eng_word,
+            node_type: n.node_type,
+            subtype: n.subtype,
+            semantic_role: n.semantic_role
         } as node
         """
         results = list(self.mg.execute_and_fetch(query))
         return [r['node'] for r in results if r['node']]
     
-    def update_node(self, old_id: str, new_id: str = None, new_rus_word: str = None, new_eng_word: str = None) -> bool:
-        """Обновить ID и/или слова узла"""
+    def update_node(self, old_id: str, new_id: str = None, new_rus_word: str = None, 
+                    new_eng_word: str = None, new_node_type: str = None,
+                    new_subtype: str = None, new_semantic_role: str = None) -> bool:
+        """Обновить узел"""
         updates = []
         params = {'old_id': old_id}
         
@@ -62,6 +85,15 @@ class MemgraphClient:
         if new_eng_word:
             updates.append("n.eng_word = $new_eng_word")
             params['new_eng_word'] = new_eng_word
+        if new_node_type:
+            updates.append("n.node_type = $new_node_type")
+            params['new_node_type'] = new_node_type
+        if new_subtype:
+            updates.append("n.subtype = $new_subtype")
+            params['new_subtype'] = new_subtype
+        if new_semantic_role:
+            updates.append("n.semantic_role = $new_semantic_role")
+            params['new_semantic_role'] = new_semantic_role
         
         if not updates:
             return True
@@ -100,20 +132,30 @@ class MemgraphClient:
         DELETE r
         RETURN count(r) as deleted
         """
-        results = list(self.mg.execute(query, {'from_id': from_id, 'to_id': to_id}))
+        self.mg.execute(query, {'from_id': from_id, 'to_id': to_id})
         return True
-    
+
     def init_mock_data(self, mock_data: dict):
         """Загрузить тестовые данные"""
         self.mg.execute("MATCH (n) DETACH DELETE n")
-        
         for node_id, node_info in mock_data.items():
-            rus = node_info.get('rus_word', '')
-            eng = node_info.get('eng_word', '')
-            self.mg.execute(
-                "CREATE (n:Word {id: $id, rus_word: $rus, eng_word: $eng})",
-                {'id': node_id, 'rus': rus, 'eng': eng}
-            )
+            self.mg.execute("""
+                CREATE (n:Word {
+                    id: $id, 
+                    rus_word: $rus, 
+                    eng_word: $eng,
+                    node_type: $node_type,
+                    subtype: $subtype,
+                    semantic_role: $semantic_role
+                })
+            """, {
+                'id': node_id,
+                'rus': node_info.get('rus_word', ''),
+                'eng': node_info.get('eng_word', ''),
+                'node_type': node_info.get('node_type', 'OBJECT'),
+                'subtype': node_info.get('subtype', ''),
+                'semantic_role': node_info.get('semantic_role', '')
+            })
         
         for node_id, node_info in mock_data.items():
             for neighbor in node_info.get('neighbors', []):
