@@ -1,4 +1,3 @@
-# api/views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -110,9 +109,6 @@ def delete_edge(request):
     
     client.delete_edge(from_id, to_id, relation)
     return Response({"status": "deleted"})
-
-
-
 
 @api_view(['POST'])
 def init_mock_data(request):
