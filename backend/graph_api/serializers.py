@@ -1,4 +1,4 @@
-"""добавила в узел больше атрибутов и нужно изменить memgraph_client и views """
+"""добавила в узел 2 свойства"""
 from rest_framework import serializers
 
 class NodeSerializer(serializers.Serializer):
