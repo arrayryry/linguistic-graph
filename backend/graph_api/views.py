@@ -1,3 +1,4 @@
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -132,7 +133,8 @@ def init_mock_data(request):
     "k28": {"id": "k28", "rus_word": "прелесть", "eng_word": "charm", "neighbors": [{"id": "k27", "label": "синоним"}]},
     "k29": {"id": "k29", "rus_word": "уродство", "eng_word": "ugliness", "neighbors": [{"id": "k27", "label": "антоним"}]},
     "k30": {"id": "k30", "rus_word": "эстетика", "eng_word": "aesthetics", "neighbors": [{"id": "k27", "label": "ассоциация"}, {"id": "k28", "label": "родственный"}]}
-    }
+}
+    
     try:
         client.init_mock_data(mock_data)
         return Response({"status": "success", "message": "Mock data loaded"})

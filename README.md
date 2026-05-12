@@ -11,17 +11,28 @@
 - Тёмная тема
 - Экспорт графа в JSON
 - Автоматическое управление памятью (макс. 20 видимых узлов)
-
+### Типы семантических связей
+- `синоним` - синонимические отношения
+- `антоним` - антонимические отношения
+- `гипоним` - частное понятие
+- `гипероним` - общее понятие
+- `мероним` - часть от целого
+- `голоним` - целое от части
+- `ассоциация` - ассоциативные связи
+- и другие лингвистические отношения
 ## Технологии
 
 - **Frontend**: D3.js, HTML5, CSS3
-- **Backend**: Django, Memgraph
+- **Backend**: Django 4.2, Django REST Framework
+- **Графовая БД**: Memgraph
+- **Драйвер**: GQLAlchemy
+- **Язык запросов**: Cypher
 
 ## Установка и запуск
 
 Клонируйте репозиторий:
 ```bash
-git clone https://github.com/aaghTT/linguistic-graph.git
+git clone https://github.com/arrayruru/linguistic-graph.git
 cd linguistic-graph/frontend
 ```
 
@@ -36,8 +47,13 @@ npx live-server
 
 ```bash
 cd backend
+docker run -p 7687:7687 memgraph/memgraph
 pip install -r requirements.txt
 python manage.py runserver
+```
+Инициализация тестовых данных
+```bash
+python load_mock_data.py
 ```
 
 ## Использование
@@ -48,9 +64,34 @@ python manage.py runserver
 4. Перетаскивайте узлы для удобного расположения
 5. Используйте колёсико мыши для зума
 
-## Автор
+## API Эндпоинты
 
-aaghTT
+Базовый URL: `http://localhost:8000/api/`
+
+## API Эндпоинты
+
+Базовый URL: `http://localhost:8000/api/`
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| GET | `/node/<str:node_id>` | Получить узел с соседями |
+| POST | `/node` | Создать узел |
+| GET | `/nodes` | Получить все узлы |
+| PUT | `/node/<str:node_id>/update` | Обновить узел |
+| DELETE | `/node/<str:node_id>/delete` | Удалить узел |
+| POST | `/edge` | Создать связь |
+| DELETE | `/edge/delete` | Удалить связь |
+| POST | `/init-mock/` | Загрузить тестовые данные |
+
+### Утилиты
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| POST | `/init-mock` | Загрузить тестовые данные |
+
+## Автор
+- aaghTT frontend
+- arrayryry backend
 
 ## Лицензия
 
