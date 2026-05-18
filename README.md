@@ -1,10 +1,10 @@
 # Лингвистический граф
 
-Визуализация семантических связей между словами в виде интерактивного графа.
+Визуализация иерархических связей между словами в виде интерактивного графа.
 
 ## Возможности
 
-- Интерактивная визуализация семантических связей
+- Интерактивная визуализация связей
 - Поиск и раскрытие узлов графа
 - Drag and drop для перемещения узлов
 - Авто-центрирование на выбранном узле
@@ -47,18 +47,18 @@ npx live-server
 
 ```bash
 cd backend
-docker run -p 7687:7687 memgraph/memgraph
+docker-compose up -d
 pip install -r requirements.txt
 python manage.py runserver
 ```
-Инициализация тестовых данных
+Инициализации данных
 ```bash
-python load_mock_data.py
+python load_concept.py
 ```
 
 ## Использование
 
-1. Введите ID узла в поле поиска
+1. Введите слово в поле поиска
 2. Нажмите "Загрузить узел" или Enter
 3. Кликайте на узлы для раскрытия связей
 4. Перетаскивайте узлы для удобного расположения
@@ -72,22 +72,22 @@ python load_mock_data.py
 
 Базовый URL: `http://localhost:8000/api/`
 
-| Метод | Эндпоинт | Описание |
+| Метод | Эндпойнт | Описание |
 |-------|----------|----------|
-| GET | `/node/<str:node_id>` | Получить узел с соседями |
-| POST | `/node` | Создать узел |
-| GET | `/nodes` | Получить все узлы |
-| PUT | `/node/<str:node_id>/update` | Обновить узел |
-| DELETE | `/node/<str:node_id>/delete` | Удалить узел |
-| POST | `/edge` | Создать связь |
-| DELETE | `/edge/delete` | Удалить связь |
-| POST | `/init-mock/` | Загрузить тестовые данные |
-
-### Утилиты
-
-| Метод | Эндпоинт | Описание |
-|-------|----------|----------|
-| POST | `/init-mock` | Загрузить тестовые данные |
+| GET | `/concept/<int:concept_id>` | Получить концепт |
+| POST | `/concept` | Создать концепт |
+| GET | `/concepts` | Все концепты |
+| PUT/PATCH | `/concept/<int:concept_id>/update` | Обновить концепт |
+| DELETE | `/concept/<int:concept_id>/delete` | Удалить концепт |
+| GET | `/concept/<int:concept_id>/children` | Прямые потомки |
+| GET | `/concept/<int:concept_id>/parent` | Родитель |
+| GET | `/concept/<int:concept_id>/children/all` | Все потомки (рекурсивно) |
+| GET | `/concept/<int:concept_id>/parents/all` | Все родители (рекурсивно) |
+| POST | `/semantic-edge` | Создать семантическую связь |
+| DELETE | `/semantic-edge/delete` | Удалить семантическую связь |
+| GET | `/search/` | Поиск концептов |
+| POST | `/load-concepts/` | Загрузка концептов |
+| POST | `/load-test-data/` | Загрузка тестовых данных |
 
 ## Автор
 - aaghTT frontend
