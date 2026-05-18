@@ -162,73 +162,67 @@ class MemgraphClient:
     # ========== ИЕРАРХИЯ (ДЕТИ И РОДИТЕЛИ) ==========
     
     def get_children(self, concept_id: int) -> List[dict]:
-        """Получить всех детей концепта"""
+        """Получить всех детей концепта (один уровень)"""
         query = """
-        MATCH (child:Concept {hypernym: $id})
-        RETURN {
-            id: child.id,
-            ru_name: child.ru_name,
-            en_name: child.en_name,
-            type: child.type,
-            hypernym: child.hypernym
-        } as child
-        """
+    MATCH (child:Concept {hypernym: $id})
+    RETURN {
+        id: child.id,
+        ru_name: child.ru_name,
+        en_name: child.en_name,
+        type: child.type,
+        hypernym: child.hypernym
+    } as child
+    """
         results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
         return [r['child'] for r in results if r.get('child')]
-    
+
     def get_parent(self, concept_id: int) -> Optional[dict]:
-        """Получить родителя концепта"""
+        """Получить родителя концепта (один уровень)"""
         query = """
-        MATCH (c:Concept {id: $id})
-        WHERE c.hypernym IS NOT NULL
-        MATCH (parent:Concept {id: c.hypernym})
-        RETURN {
-            id: parent.id,
-            ru_name: parent.ru_name,
-            en_name: parent.en_name,
-            type: parent.type,
-            hypernym: parent.hypernym
-        } as parent
-        """
+    MATCH (c:Concept {id: $id})
+    WHERE c.hypernym IS NOT NULL
+    MATCH (parent:Concept {id: c.hypernym})
+    RETURN {
+        id: parent.id,
+        ru_name: parent.ru_name,
+        en_name: parent.en_name,
+        type: parent.type,
+        hypernym: parent.hypernym
+    } as parent
+    """
         results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
-        return results[0]['parent'] if results else None
-    
+        return results[0]['parent'] if results and results[0].get('parent') else None
+
     def get_children_recursive(self, concept_id: int) -> List[dict]:
-        """Рекурсивно получить всех потомков"""
-        query = """
-        MATCH path = (root:Concept {id: $id})<-[:HYPERNYM*]-(child:Concept)
-        WITH child, length(path) as depth
-        ORDER BY depth
-        RETURN {
-            id: child.id,
-            ru_name: child.ru_name,
-            en_name: child.en_name,
-            type: child.type,
-            hypernym: child.hypernym,
-            depth: depth
-        } as descendant
-        """
-        results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
-        return [r['descendant'] for r in results if r.get('descendant')]
+        """Рекурсивно получить всех потомков (все уровни вниз)"""
+        result = []
     
+        def collect(parent_id: int, depth: int):
+            children = self.get_children(parent_id)
+            for child in children:
+                child['depth'] = depth
+                result.append(child)
+                collect(child['id'], depth + 1)
+    
+        collect(concept_id, 1)
+        return result
+
     def get_parents_recursive(self, concept_id: int) -> List[dict]:
-        """Рекурсивно получить всех предков"""
-        query = """
-        MATCH path = (start:Concept {id: $id})-[:HYPERNYM*]->(ancestor:Concept)
-        WITH ancestor, length(path) as depth
-        ORDER BY depth
-        RETURN {
-            id: ancestor.id,
-            ru_name: ancestor.ru_name,
-            en_name: ancestor.en_name,
-            type: ancestor.type,
-            hypernym: ancestor.hypernym,
-            depth: depth
-        } as ancestor
-        """
-        results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
-        return [r['ancestor'] for r in results if r.get('ancestor')]
+        """Рекурсивно получить всех предков (все уровни вверх)"""
+        result = []
+        current_id = concept_id
+        depth = 1
     
+        while True:
+            parent = self.get_parent(current_id)
+            if not parent:
+                break
+            parent['depth'] = depth
+            result.append(parent)
+            current_id = parent['id']
+            depth += 1
+    
+        return result
     # ========== СЕМАНТИЧЕСКИЕ СВЯЗИ ==========
     
     def add_semantic_edge(self, from_id: int, to_id: int, relation: str) -> bool:
