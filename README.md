@@ -81,8 +81,8 @@ python load_concept.py
 | DELETE | `/concept/<int:concept_id>/delete` | Удалить концепт |
 | GET | `/concept/<int:concept_id>/children` | Прямые потомки |
 | GET | `/concept/<int:concept_id>/parent` | Родитель |
-| GET | `/concept/<int:concept_id>/children/all` | Все потомки (рекурсивно) |
-| GET | `/concept/<int:concept_id>/parents/all` | Все родители (рекурсивно) |
+| GET | `/concept/<int:concept_id>/children/all` | Все потомки (рекурсивно) для расширения в будущем |
+| GET | `/concept/<int:concept_id>/parents/all` | Все родители (рекурсивно) для расширения в будущем|
 | POST | `/semantic-edge` | Создать семантическую связь |
 | DELETE | `/semantic-edge/delete` | Удалить семантическую связь |
 | GET | `/search/` | Поиск концептов |
