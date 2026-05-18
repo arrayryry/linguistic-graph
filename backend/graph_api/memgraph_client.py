@@ -193,11 +193,13 @@ class MemgraphClient:
         results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
         return results[0]['parent'] if results and results[0].get('parent') else None
 
-    def get_children_recursive(self, concept_id: int) -> List[dict]:
-        """Рекурсивно получить всех потомков (все уровни вниз)"""
+    def get_children_recursive(self, concept_id: int,max_depth: int = 3) -> List[dict]:
+        """Рекурсивно получить всех потомков (все уровни вниз, но с ограничением, чтобы не нагружать бд)"""
         result = []
     
         def collect(parent_id: int, depth: int):
+            if depth > max_depth:
+                return
             children = self.get_children(parent_id)
             for child in children:
                 child['depth'] = depth

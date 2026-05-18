@@ -12,6 +12,7 @@ urlpatterns = [
     # Иерархия (гиперонимы)
     path('concept/<int:concept_id>/children', views.get_children, name='get_children'),
     path('concept/<int:concept_id>/parent', views.get_parent, name='get_parent'),
+    #эти 2 эндпойнта не для фронта так для расширения функционала
     path('concept/<int:concept_id>/children/all', views.get_children_recursive, name='get_children_recursive'),
     path('concept/<int:concept_id>/parents/all', views.get_parents_recursive, name='get_parents_recursive'),
     
