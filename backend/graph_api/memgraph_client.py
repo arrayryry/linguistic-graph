@@ -1,172 +1,326 @@
 from gqlalchemy import Memgraph
 from typing import List, Dict, Optional
+from django.conf import settings
 
 class MemgraphClient:
     def __init__(self):
-        self.mg = Memgraph(host='localhost', port=7687)
+        self.mg = Memgraph(
+            host=settings.MEMGRAPH_CONFIG['host'],
+            port=settings.MEMGRAPH_CONFIG['port']
+        )
     
+    # ========== КОНЦЕПТЫ ==========
     
-    def get_node_with_neighbors(self, node_id: str) -> Optional[dict]:
-        """Получить узел со всеми соседями"""
-        query = """
-        MATCH (n:Word {id: $id})
-        OPTIONAL MATCH (n)-[r]-(neighbor:Word)
-        RETURN {
-            id: n.id,
-            rus_word: n.rus_word,
-            eng_word: n.eng_word,
-            node_type: n.node_type,
-            subtype: n.subtype,
-            semantic_role: n.semantic_role,
-            neighbors: COLLECT(DISTINCT {
-                id: neighbor.id,
-                label: TYPE(r)
-            })
-        } as result
+    def get_concept_with_relations(self, concept_id: int) -> Optional[dict]:
+        """Получить концепт со всеми связями (дети + семантические связи)"""
+        
+        # 1. Получаем концепт
+        query_concept = """
+        MATCH (c:Concept {id: $id})
+        RETURN 
+            c.id as id,
+            c.ru_name as ru_name,
+            c.en_name as en_name,
+            c.type as type,
+            c.hypernym as hypernym
         """
-        results = list(self.mg.execute_and_fetch(query, {'id': node_id}))
-        if results and results[0].get('result'):
-            return results[0]['result']
-        return None
+        concept_results = list(self.mg.execute_and_fetch(query_concept, {'id': concept_id}))
+        
+        if not concept_results:
+            return None
+        
+        row = concept_results[0]
+        result = {
+            'id': row['id'],
+            'ru_name': row['ru_name'],
+            'en_name': row['en_name'],
+            'type': row['type'],
+            'hypernym': row['hypernym'],
+            'children': [],
+            'semantic_neighbors': []
+        }
+        
+        # 2. Получаем детей
+        query_children = """
+        MATCH (child:Concept {hypernym: $id})
+        RETURN {
+            id: child.id,
+            ru_name: child.ru_name,
+            en_name: child.en_name,
+            type: child.type
+        } as child
+        """
+        children_results = list(self.mg.execute_and_fetch(query_children, {'id': concept_id}))
+        result['children'] = [r['child'] for r in children_results if r.get('child')]
+        
+        # 3. Получаем семантические связи
+        query_semantic = """
+        MATCH (c:Concept {id: $id})-[r:SEMANTIC]-(neighbor:Concept)
+        RETURN {
+            id: neighbor.id,
+            ru_name: neighbor.ru_name,
+            en_name: neighbor.en_name,
+            type: neighbor.type,
+            relation: TYPE(r)
+        } as neighbor
+        """
+        semantic_results = list(self.mg.execute_and_fetch(query_semantic, {'id': concept_id}))
+        result['semantic_neighbors'] = [r['neighbor'] for r in semantic_results if r.get('neighbor')]
+        
+        return result
     
-    def add_node(self, node_id: str, rus_word: str = "", eng_word: str = "", 
-                 node_type: str = "OBJECT", subtype: str = "", semantic_role: str = "") -> bool:
-        """Создать узел с типом, подтипом и семантической ролью"""
+    def add_concept(self, concept_id: int, ru_name: str, en_name: str, 
+                    concept_type: str, hypernym: int = None) -> bool:
+        """Создать концепт"""
         query = """
-        CREATE (n:Word {
-            id: $id, 
-            rus_word: $rus_word, 
-            eng_word: $eng_word,
-            node_type: $node_type,
-            subtype: $subtype,
-            semantic_role: $semantic_role
+        CREATE (c:Concept {
+            id: $id,
+            ru_name: $ru_name,
+            en_name: $en_name,
+            type: $type,
+            hypernym: $hypernym
         })
-        RETURN n
+        RETURN c
         """
         self.mg.execute(query, {
-            'id': node_id, 
-            'rus_word': rus_word, 
-            'eng_word': eng_word,
-            'node_type': node_type,
-            'subtype': subtype,
-            'semantic_role': semantic_role
+            'id': concept_id,
+            'ru_name': ru_name,
+            'en_name': en_name,
+            'type': concept_type,
+            'hypernym': hypernym
         })
         return True
     
-    def get_all_nodes(self) -> List[dict]:
-        """Получить все узлы"""
-        query = """
-        MATCH (n:Word) 
-        RETURN {
-            id: n.id, 
-            rus_word: n.rus_word, 
-            eng_word: n.eng_word,
-            node_type: n.node_type,
-            subtype: n.subtype,
-            semantic_role: n.semantic_role
-        } as node
-        """
-        results = list(self.mg.execute_and_fetch(query))
-        return [r['node'] for r in results if r['node']]
-    
-    def update_node(self, old_id: str, new_id: str = None, new_rus_word: str = None, 
-                    new_eng_word: str = None, new_node_type: str = None,
-                    new_subtype: str = None, new_semantic_role: str = None) -> bool:
-        """Обновить узел"""
-        updates = []
-        params = {'old_id': old_id}
+    def get_all_concepts(self, concept_type: str = None, limit: int = 2000) -> List[dict]:
+        """Получить все концепты """
+        if concept_type:
+            query = """
+            MATCH (c:Concept {type: $type})
+            RETURN {
+                id: c.id,
+                ru_name: c.ru_name,
+                en_name: c.en_name,
+                type: c.type,
+                hypernym: c.hypernym
+            } as concept
+            LIMIT $limit
+            """
+            results = list(self.mg.execute_and_fetch(query, {'type': concept_type, 'limit': limit}))
+        else:
+            query = """
+            MATCH (c:Concept)
+            RETURN {
+                id: c.id,
+                ru_name: c.ru_name,
+                en_name: c.en_name,
+                type: c.type,
+                hypernym: c.hypernym
+            } as concept
+            LIMIT $limit
+            """
+            results = list(self.mg.execute_and_fetch(query, {'limit': limit}))
         
-        if new_id:
-            updates.append("n.id = $new_id")
-            params['new_id'] = new_id
-        if new_rus_word:
-            updates.append("n.rus_word = $new_rus_word")
-            params['new_rus_word'] = new_rus_word
-        if new_eng_word:
-            updates.append("n.eng_word = $new_eng_word")
-            params['new_eng_word'] = new_eng_word
-        if new_node_type:
-            updates.append("n.node_type = $new_node_type")
-            params['new_node_type'] = new_node_type
-        if new_subtype:
-            updates.append("n.subtype = $new_subtype")
-            params['new_subtype'] = new_subtype
-        if new_semantic_role:
-            updates.append("n.semantic_role = $new_semantic_role")
-            params['new_semantic_role'] = new_semantic_role
+        return [r['concept'] for r in results if r.get('concept')]
+    
+    def update_concept(self, concept_id: int, new_ru_name: str = None, 
+                       new_en_name: str = None, new_type: str = None,
+                       new_hypernym: int = None) -> bool:
+        """Обновить концепт"""
+        updates = []
+        params = {'id': concept_id}
+        
+        if new_ru_name:
+            updates.append("c.ru_name = $new_ru_name")
+            params['new_ru_name'] = new_ru_name
+        if new_en_name:
+            updates.append("c.en_name = $new_en_name")
+            params['new_en_name'] = new_en_name
+        if new_type:
+            updates.append("c.type = $new_type")
+            params['new_type'] = new_type
+        if new_hypernym is not None:
+            updates.append("c.hypernym = $new_hypernym")
+            params['new_hypernym'] = new_hypernym
         
         if not updates:
             return True
         
         query = f"""
-        MATCH (n:Word {{id: $old_id}})
+        MATCH (c:Concept {{id: $id}})
         SET {', '.join(updates)}
-        RETURN n
+        RETURN c
         """
         self.mg.execute(query, params)
         return True
     
-    def delete_node(self, node_id: str) -> bool:
-        """Удалить узел"""
-        query = "MATCH (n:Word {id: $id}) DETACH DELETE n RETURN count(n) as deleted"
-        results = list(self.mg.execute_and_fetch(query, {'id': node_id}))
+    def delete_concept(self, concept_id: int) -> bool:
+        """Удалить концепт и все его связи"""
+        query = "MATCH (c:Concept {id: $id}) DETACH DELETE c RETURN count(c) as deleted"
+        results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
         return results[0]['deleted'] > 0 if results else False
     
+    # ========== ИЕРАРХИЯ (ДЕТИ И РОДИТЕЛИ) ==========
     
-    def add_edge(self, from_id: str, to_id: str, relation: str) -> bool:
-        """Создать связь"""
+    def get_children(self, concept_id: int) -> List[dict]:
+        """Получить всех детей концепта"""
+        query = """
+        MATCH (child:Concept {hypernym: $id})
+        RETURN {
+            id: child.id,
+            ru_name: child.ru_name,
+            en_name: child.en_name,
+            type: child.type,
+            hypernym: child.hypernym
+        } as child
+        """
+        results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
+        return [r['child'] for r in results if r.get('child')]
+    
+    def get_parent(self, concept_id: int) -> Optional[dict]:
+        """Получить родителя концепта"""
+        query = """
+        MATCH (c:Concept {id: $id})
+        WHERE c.hypernym IS NOT NULL
+        MATCH (parent:Concept {id: c.hypernym})
+        RETURN {
+            id: parent.id,
+            ru_name: parent.ru_name,
+            en_name: parent.en_name,
+            type: parent.type,
+            hypernym: parent.hypernym
+        } as parent
+        """
+        results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
+        return results[0]['parent'] if results else None
+    
+    def get_children_recursive(self, concept_id: int) -> List[dict]:
+        """Рекурсивно получить всех потомков"""
+        query = """
+        MATCH path = (root:Concept {id: $id})<-[:HYPERNYM*]-(child:Concept)
+        WITH child, length(path) as depth
+        ORDER BY depth
+        RETURN {
+            id: child.id,
+            ru_name: child.ru_name,
+            en_name: child.en_name,
+            type: child.type,
+            hypernym: child.hypernym,
+            depth: depth
+        } as descendant
+        """
+        results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
+        return [r['descendant'] for r in results if r.get('descendant')]
+    
+    def get_parents_recursive(self, concept_id: int) -> List[dict]:
+        """Рекурсивно получить всех предков"""
+        query = """
+        MATCH path = (start:Concept {id: $id})-[:HYPERNYM*]->(ancestor:Concept)
+        WITH ancestor, length(path) as depth
+        ORDER BY depth
+        RETURN {
+            id: ancestor.id,
+            ru_name: ancestor.ru_name,
+            en_name: ancestor.en_name,
+            type: ancestor.type,
+            hypernym: ancestor.hypernym,
+            depth: depth
+        } as ancestor
+        """
+        results = list(self.mg.execute_and_fetch(query, {'id': concept_id}))
+        return [r['ancestor'] for r in results if r.get('ancestor')]
+    
+    # ========== СЕМАНТИЧЕСКИЕ СВЯЗИ ==========
+    
+    def add_semantic_edge(self, from_id: int, to_id: int, relation: str) -> bool:
+        """Добавить семантическую связь"""
         query = f"""
-        MATCH (from:Word {{id: $from_id}})
-        MATCH (to:Word {{id: $to_id}})
-        CREATE (from)-[:{relation}]->(to)
+        MATCH (from:Concept {{id: $from_id}})
+        MATCH (to:Concept {{id: $to_id}})
+        CREATE (from)-[:SEMANTIC {{type: $relation}}]->(to)
         RETURN from, to
         """
-        self.mg.execute(query, {'from_id': from_id, 'to_id': to_id})
+        self.mg.execute(query, {'from_id': from_id, 'to_id': to_id, 'relation': relation})
         return True
     
-    def delete_edge(self, from_id: str, to_id: str, relation: str = None) -> bool:
-        """Удалить связь"""
-        type_filter = f":{relation}" if relation else ""
-        query = f"""
-        MATCH (from:Word {{id: $from_id}})-[r{type_filter}]->(to:Word {{id: $to_id}})
-        DELETE r
-        RETURN count(r) as deleted
-        """
-        self.mg.execute(query, {'from_id': from_id, 'to_id': to_id})
+    def delete_semantic_edge(self, from_id: int, to_id: int, relation: str = None) -> bool:
+        """Удалить семантическую связь"""
+        if relation:
+            query = """
+            MATCH (from:Concept {id: $from_id})-[r:SEMANTIC {type: $relation}]->(to:Concept {id: $to_id})
+            DELETE r
+            RETURN count(r) as deleted
+            """
+            self.mg.execute(query, {'from_id': from_id, 'to_id': to_id, 'relation': relation})
+        else:
+            query = """
+            MATCH (from:Concept {id: $from_id})-[r:SEMANTIC]->(to:Concept {id: $to_id})
+            DELETE r
+            RETURN count(r) as deleted
+            """
+            self.mg.execute(query, {'from_id': from_id, 'to_id': to_id})
         return True
-
-    def init_mock_data(self, mock_data: dict):
-        """Загрузить тестовые данные"""
+    
+    
+    def load_concepts_from_json(self, concepts_data: list) -> dict:
+        """Загрузить концепты из JSON"""
+        # Очищаем БД
         self.mg.execute("MATCH (n) DETACH DELETE n")
-        for node_id, node_info in mock_data.items():
-            self.mg.execute("""
-                CREATE (n:Word {
-                    id: $id, 
-                    rus_word: $rus, 
-                    eng_word: $eng,
-                    node_type: $node_type,
-                    subtype: $subtype,
-                    semantic_role: $semantic_role
-                })
-            """, {
-                'id': node_id,
-                'rus': node_info.get('rus_word', ''),
-                'eng': node_info.get('eng_word', ''),
-                'node_type': node_info.get('node_type', 'OBJECT'),
-                'subtype': node_info.get('subtype', ''),
-                'semantic_role': node_info.get('semantic_role', '')
-            })
         
-        for node_id, node_info in mock_data.items():
-            for neighbor in node_info.get('neighbors', []):
-                query = f"""
-                MATCH (from:Word {{id: $from_id}})
-                MATCH (to:Word {{id: $to_id}})
-                CREATE (from)-[:{neighbor['label']}]->(to)
-                """
-                self.mg.execute(query, {
-                    'from_id': node_id,
-                    'to_id': neighbor['id']
-                })
+        # Создаем все узлы
+        for concept in concepts_data:
+            self.add_concept(
+                concept_id=concept['id'],
+                ru_name=concept['ru_name'],
+                en_name=concept['en_name'],
+                concept_type=concept['type'],
+                hypernym=concept.get('hypernym')
+            )
         
-        return True
+        return {"status": "success", "nodes_loaded": len(concepts_data)}
+    
+    # ========== ТЕСТОВЫЕ ДАННЫЕ ==========
+    
+    def load_test_data(self):
+        """Загрузить тестовые данные для проверки"""
+        test_data = [
+            {"id": 1, "ru_name": "сущность", "en_name": "entity", "type": "object_concept", "hypernym": None},
+            {"id": 2, "ru_name": "физическая сущность", "en_name": "physical entity", "type": "object_concept", "hypernym": 1},
+            {"id": 3, "ru_name": "абстрактная сущность", "en_name": "abstract entity", "type": "object_concept", "hypernym": 1},
+            {"id": 4, "ru_name": "объект", "en_name": "object", "type": "object_concept", "hypernym": 2},
+            {"id": 5, "ru_name": "живое существо", "en_name": "living thing", "type": "object_concept", "hypernym": 4},
+            {"id": 6, "ru_name": "животное", "en_name": "animal", "type": "object_concept", "hypernym": 5},
+            {"id": 7, "ru_name": "собака", "en_name": "dog", "type": "object_concept", "hypernym": 6},
+            {"id": 8, "ru_name": "действие", "en_name": "action", "type": "action_concept", "hypernym": None},
+            {"id": 9, "ru_name": "быстро", "en_name": "fast", "type": "action_attribute_concept", "hypernym": None},
+            {"id": 10, "ru_name": "красный", "en_name": "red", "type": "object_attribute_concept", "hypernym": None},
+        ]
+        return self.load_concepts_from_json(test_data)
+    
+    def search_by_russian_word(self, search_term: str, limit: int = 50) -> List[dict]:
+        """Поиск концептов по русскому слову (игнорируя описание в скобках)"""
+    
+        query = """
+    MATCH (c:Concept)
+    WITH c, 
+         split(c.ru_name, '(')[0] AS clean_word
+    WHERE toLower(clean_word) CONTAINS toLower($search_term)
+    RETURN {
+        id: c.id,
+        ru_name: c.ru_name,
+        en_name: c.en_name,
+        type: c.type
+    } as concept
+    LIMIT $limit
+    """
+        results = list(self.mg.execute_and_fetch(query, {
+            'search_term': search_term,
+            'limit': limit
+        }))
+    
+    # Фильтруем None значения
+        filtered = []
+        for r in results:
+            if r.get('concept') and r['concept'].get('id'):
+                filtered.append(r['concept'])
+    
+        return filtered

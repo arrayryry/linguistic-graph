@@ -1,106 +1,132 @@
-# api/views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from .memgraph_client import MemgraphClient
-from .serializers import NodeSerializer, CreateEdgeSerializer, UpdateNodeSerializer
+from .serializers import ConceptSerializer, CreateEdgeSerializer, UpdateConceptSerializer
 
 client = MemgraphClient()
 
+# ========== КОНЦЕПТЫ ==========
+
 @api_view(['GET'])
-def get_node(request, node_id):
-    """GET /api/node/k1 - получить узел с соседями"""
-    result = client.get_node_with_neighbors(node_id)
+def get_concept(request, concept_id):
+    """GET /api/concept/1 - получить концепт со всеми связями"""
+    result = client.get_concept_with_relations(concept_id)
     if result and result.get('id'):
         return Response(result)
-    return Response({"error": "Node not found"}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"error": "Concept not found"}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
-def get_all_nodes(request):
-    """GET /api/nodes - получить все узлы"""
-    nodes = client.get_all_nodes()
-    return Response({"nodes": nodes})
+def get_all_concepts(request):
+    """GET /api/concepts - получить все концепты
+       GET /api/concepts?type=object_concept - фильтр по типу"""
+    concept_type = request.query_params.get('type')
+    concepts = client.get_all_concepts(concept_type)
+    return Response({"concepts": concepts})
 
 @api_view(['POST'])
-def add_node(request):
-    """POST /api/node - создать узел
-    Body: {
-        "id": "k1", 
-        "rus_word": "слово", 
-        "eng_word": "word",
-        "node_type": "OBJECT",
-        "subtype": "PERSON",
-        "semantic_role": "AGENT"
-    }"""
-    serializer = NodeSerializer(data=request.data)
+def add_concept(request):
+    """POST /api/concept - создать концепт"""
+    serializer = ConceptSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     data = serializer.validated_data
-    client.add_node(
-        node_id=data['id'],
-        rus_word=data.get('rus_word', ''),
-        eng_word=data.get('eng_word', ''),
-        node_type=data.get('node_type', 'OBJECT'),
-        subtype=data.get('subtype', ''),
-        semantic_role=data.get('semantic_role', '')
+    success = client.add_concept(
+        concept_id=data['id'],
+        ru_name=data['ru_name'],
+        en_name=data['en_name'],
+        concept_type=data['type'],
+        hypernym=data.get('hypernym')
     )
-    return Response({"status": "ok", "id": data['id']}, status=status.HTTP_201_CREATED)
+    
+    if success:
+        return Response({"status": "ok", "id": data['id']}, status=status.HTTP_201_CREATED)
+    return Response({"error": "Failed to create concept"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+@api_view(['GET'])
+def search_concepts(request):
+    """GET /api/search/?q=сущность"""
+    query = request.query_params.get('q', '')
+    limit = int(request.query_params.get('limit', 50))
+    
+    if not query or len(query.strip()) < 2:
+        return Response(
+            {"error": "Search query must be at least 2 characters"},
+            status=400
+        )
+    
+    results = client.search_by_russian_word(query, limit)
+    return Response({"query": query, "count": len(results), "results": results})
 
 @api_view(['PUT'])
-def update_node(request, node_id):
-    """PUT /api/node/k1/update - обновить узел
-    Body: {
-        "new_id": "new_id",
-        "new_rus_word": "новое",
-        "new_eng_word": "new",
-        "new_node_type": "ACTION",
-        "new_subtype": "MENTAL",
-        "new_semantic_role": "AGENT"
-    }"""
-    serializer = UpdateNodeSerializer(data=request.data)
+def update_concept(request, concept_id):
+    """PUT /api/concept/1/update - обновить концепт"""
+    serializer = UpdateConceptSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     data = serializer.validated_data
-    success = client.update_node(
-        old_id=node_id,
-        new_id=data.get('new_id'),
-        new_rus_word=data.get('new_rus_word'),
-        new_eng_word=data.get('new_eng_word'),
-        new_node_type=data.get('new_node_type'),
-        new_subtype=data.get('new_subtype'),
-        new_semantic_role=data.get('new_semantic_role')
+    client.update_concept(
+        concept_id=concept_id,
+        new_ru_name=data.get('new_ru_name'),
+        new_en_name=data.get('new_en_name'),
+        new_type=data.get('new_type'),
+        new_hypernym=data.get('new_hypernym')
     )
-    if success:
-        return Response({"status": "updated"})
-    return Response({"error": "Node not found"}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"status": "updated"})
 
 @api_view(['DELETE'])
-def delete_node(request, node_id):
-    """DELETE /api/node/k1/delete - удалить узел"""
-    success = client.delete_node(node_id)
+def delete_concept(request, concept_id):
+    """DELETE /api/concept/1/delete - удалить концепт"""
+    success = client.delete_concept(concept_id)
     if success:
-        return Response({"status": "deleted", "id": node_id})
-    return Response({"error": "Node not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"status": "deleted", "id": concept_id})
+    return Response({"error": "Concept not found"}, status=status.HTTP_404_NOT_FOUND)
 
+# ========== ИЕРАРХИЯ (ДЕТИ И РОДИТЕЛИ) ==========
+
+@api_view(['GET'])
+def get_children(request, concept_id):
+    """GET /api/concept/1/children - получить детей концепта"""
+    children = client.get_children(concept_id)
+    return Response({"concept_id": concept_id, "children": children})
+
+@api_view(['GET'])
+def get_parent(request, concept_id):
+    """GET /api/concept/1/parent - получить родителя концепта"""
+    parent = client.get_parent(concept_id)
+    return Response({"concept_id": concept_id, "parent": parent})
+
+@api_view(['GET'])
+def get_children_recursive(request, concept_id):
+    """GET /api/concept/1/children/all - получить всех потомков рекурсивно"""
+    children = client.get_children_recursive(concept_id)
+    return Response({"concept_id": concept_id, "descendants": children})
+
+@api_view(['GET'])
+def get_parents_recursive(request, concept_id):
+    """GET /api/concept/1/parents/all - получить всех предков рекурсивно"""
+    parents = client.get_parents_recursive(concept_id)
+    return Response({"concept_id": concept_id, "ancestors": parents})
+
+# ========== СЕМАНТИЧЕСКИЕ СВЯЗИ ==========
 
 @api_view(['POST'])
-def add_edge(request):
-    """POST /api/edge - создать связь
-    Body: {"from": "k1", "to": "k2", "relation": "синоним"}"""
+def add_semantic_edge(request):
+    """POST /api/semantic-edge - добавить семантическую связь
+    Body: {"from": 1, "to": 2, "relation": "синоним"}"""
     serializer = CreateEdgeSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     data = serializer.validated_data
-    client.add_edge(data['from_id'], data['to_id'], data['rel_type'])
+    client.add_semantic_edge(data['from_id'], data['to_id'], data['rel_type'])
     return Response({"status": "ok"})
 
 @api_view(['DELETE'])
-def delete_edge(request):
-    """DELETE /api/edge/delete - удалить связь
-    Body: {"from": "k1", "to": "k2"}"""
+def delete_semantic_edge(request):
+    """DELETE /api/semantic-edge/delete - удалить семантическую связь
+    Body: {"from": 1, "to": 2}"""
     from_id = request.data.get('from')
     to_id = request.data.get('to')
     relation = request.data.get('relation')
@@ -108,199 +134,25 @@ def delete_edge(request):
     if not from_id or not to_id:
         return Response({"error": "Missing 'from' or 'to'"}, status=status.HTTP_400_BAD_REQUEST)
     
-    client.delete_edge(from_id, to_id, relation)
+    client.delete_semantic_edge(from_id, to_id, relation)
     return Response({"status": "deleted"})
 
 
+@api_view(['POST'])
+def load_concepts(request):
+    """POST /api/load-concepts/ - загрузить концепты из JSON
+    Body: [{"id": 1, "ru_name": "...", "en_name": "...", "type": "...", "hypernym": null}, ...]"""
+    concepts_data = request.data
+    if not isinstance(concepts_data, list):
+        return Response({"error": "Expected list of concepts"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    result = client.load_concepts_from_json(concepts_data)
+    return Response(result)
 
+# ========== ТЕСТОВЫЕ ДАННЫЕ ==========
 
 @api_view(['POST'])
-def init_mock_data(request):
-    """POST /api/init-mock/ - загрузить тестовые данные"""
-    mock_data = {
-    "joy_1": {
-        "id": "joy_1",
-        "rus_word": "радость",
-        "eng_word": "joy",
-        "node_type": "OBJECT",
-        "subtype": "ABSTRACT",
-        "semantic_role": "",
-        "neighbors": [{"id": "happiness_1", "label": "синоним"}]
-    },
-    "happiness_1": {
-        "id": "happiness_1",
-        "rus_word": "счастье",
-        "eng_word": "happiness",
-        "node_type": "OBJECT",
-        "subtype": "ABSTRACT",
-        "semantic_role": "",
-        "neighbors": [{"id": "joy_1", "label": "синоним"}]
-    },
-    "good_1": {
-        "id": "good_1",
-        "rus_word": "хороший",
-        "eng_word": "good",
-        "node_type": "ATTRIBUTE",
-        "subtype": "QUALITY",
-        "semantic_role": "",
-        "neighbors": [{"id": "bad_1", "label": "антоним"}]
-    },
-    "bad_1": {
-        "id": "bad_1",
-        "rus_word": "плохой",
-        "eng_word": "bad",
-        "node_type": "ATTRIBUTE",
-        "subtype": "QUALITY",
-        "semantic_role": "",
-        "neighbors": [{"id": "good_1", "label": "антоним"}]
-    },
-    "dog_1": {
-        "id": "dog_1",
-        "rus_word": "собака",
-        "eng_word": "dog",
-        "node_type": "OBJECT",
-        "subtype": "ANIMAL",
-        "semantic_role": "",
-        "neighbors": [{"id": "animal_1", "label": "гипоним"}]
-    },
-    "animal_1": {
-        "id": "animal_1",
-        "rus_word": "животное",
-        "eng_word": "animal",
-        "node_type": "OBJECT",
-        "subtype": "ANIMAL",
-        "semantic_role": "",
-        "neighbors": [{"id": "dog_1", "label": "гипероним"}]
-    },
-    "wheel_1": {
-        "id": "wheel_1",
-        "rus_word": "колесо",
-        "eng_word": "wheel",
-        "node_type": "OBJECT",
-        "subtype": "PHYSICAL",
-        "semantic_role": "",
-        "neighbors": [{"id": "car_1", "label": "мероним"}]
-    },
-    "car_1": {
-        "id": "car_1",
-        "rus_word": "машина",
-        "eng_word": "car",
-        "node_type": "OBJECT",
-        "subtype": "PHYSICAL",
-        "semantic_role": "",
-        "neighbors": [{"id": "wheel_1", "label": "голоним"}]
-    },
-    "doctor_1": {
-        "id": "doctor_1",
-        "rus_word": "врач",
-        "eng_word": "doctor",
-        "node_type": "OBJECT",
-        "subtype": "PERSON",
-        "semantic_role": "",
-        "neighbors": [{"id": "hospital_1", "label": "ассоциация"}]
-    },
-    "hospital_1": {
-        "id": "hospital_1",
-        "rus_word": "больница",
-        "eng_word": "hospital",
-        "node_type": "OBJECT",
-        "subtype": "LOCATION",
-        "semantic_role": "",
-        "neighbors": [{"id": "doctor_1", "label": "ассоциация"}]
-    },
-    "rain_1": {
-        "id": "rain_1",
-        "rus_word": "дождь",
-        "eng_word": "rain",
-        "node_type": "OBJECT",
-        "subtype": "PHENOMENON",
-        "semantic_role": "",
-        "neighbors": [{"id": "wet_1", "label": "причина"}]
-    },
-    "wet_1": {
-        "id": "wet_1",
-        "rus_word": "мокрый",
-        "eng_word": "wet",
-        "node_type": "ATTRIBUTE",
-        "subtype": "STATE",
-        "semantic_role": "",
-        "neighbors": [{"id": "rain_1", "label": "следствие"}]
-    },
-    "knife_1": {
-        "id": "knife_1",
-        "rus_word": "нож",
-        "eng_word": "knife",
-        "node_type": "OBJECT",
-        "subtype": "TOOL",
-        "semantic_role": "INSTRUMENT",
-        "neighbors": [{"id": "cut_1", "label": "инструмент"}]
-    },
-    "cut_1": {
-        "id": "cut_1",
-        "rus_word": "резать",
-        "eng_word": "cut",
-        "node_type": "ACTION",
-        "subtype": "PHYSICAL",
-        "semantic_role": "",
-        "neighbors": [{"id": "knife_1", "label": "инструмент"}]
-    },
-    "school_1": {
-        "id": "school_1",
-        "rus_word": "школа",
-        "eng_word": "school",
-        "node_type": "OBJECT",
-        "subtype": "LOCATION",
-        "semantic_role": "LOCATION",
-        "neighbors": [{"id": "study_1", "label": "локация"}]
-    },
-    "study_1": {
-        "id": "study_1",
-        "rus_word": "учиться",
-        "eng_word": "study",
-        "node_type": "ACTION",
-        "subtype": "MENTAL",
-        "semantic_role": "",
-        "neighbors": [{"id": "school_1", "label": "локация"}]
-    },
-    "teacher_1": {
-        "id": "teacher_1",
-        "rus_word": "учитель",
-        "eng_word": "teacher",
-        "node_type": "OBJECT",
-        "subtype": "PERSON",
-        "semantic_role": "",
-        "neighbors": [{"id": "pupil_1", "label": "коним"}]
-    },
-    "pupil_1": {
-        "id": "pupil_1",
-        "rus_word": "ученик",
-        "eng_word": "pupil",
-        "node_type": "OBJECT",
-        "subtype": "PERSON",
-        "semantic_role": "",
-        "neighbors": [{"id": "teacher_1", "label": "коним"}]
-    },
-    "read_1": {
-        "id": "read_1",
-        "rus_word": "читать",
-        "eng_word": "read",
-        "node_type": "ACTION",
-        "subtype": "MENTAL",
-        "semantic_role": "",
-        "neighbors": [{"id": "book_1", "label": "действие_на"}]
-    },
-    "book_1": {
-        "id": "book_1",
-        "rus_word": "книга",
-        "eng_word": "book",
-        "node_type": "OBJECT",
-        "subtype": "ABSTRACT",
-        "semantic_role": "PATIENT",
-        "neighbors": [{"id": "read_1", "label": "объект_действия"}]
-    }
-}
-    try:
-        client.init_mock_data(mock_data)
-        return Response({"status": "success", "message": "Mock data loaded"})
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+def load_test_data(request):
+    """POST /api/load-test-data/ - загрузить тестовые данные для проверки"""
+    result = client.load_test_data()
+    return Response(result)

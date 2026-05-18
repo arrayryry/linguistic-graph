@@ -1,17 +1,26 @@
-# api/urls.py
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('node/<str:node_id>', views.get_node, name='get_node'),
-    path('node', views.add_node, name='add_node'),
-    path('nodes', views.get_all_nodes, name='get_all_nodes'),
+    # Концепты
+    path('concept/<int:concept_id>', views.get_concept, name='get_concept'),
+    path('concept', views.add_concept, name='add_concept'),
+    path('concepts', views.get_all_concepts, name='get_all_concepts'),
+    path('concept/<int:concept_id>/update', views.update_concept, name='update_concept'),
+    path('concept/<int:concept_id>/delete', views.delete_concept, name='delete_concept'),
     
-    path('node/<str:node_id>/update', views.update_node, name='update_node'),
-    path('node/<str:node_id>/delete', views.delete_node, name='delete_node'),
+    # Иерархия (гиперонимы)
+    path('concept/<int:concept_id>/children', views.get_children, name='get_children'),
+    path('concept/<int:concept_id>/parent', views.get_parent, name='get_parent'),
+    path('concept/<int:concept_id>/children/all', views.get_children_recursive, name='get_children_recursive'),
+    path('concept/<int:concept_id>/parents/all', views.get_parents_recursive, name='get_parents_recursive'),
     
-    path('edge', views.add_edge, name='add_edge'),
-    path('edge/delete', views.delete_edge, name='delete_edge'),
-    
-    path('init-mock/', views.init_mock_data, name='init_mock'),
+    # Семантические связи
+    path('semantic-edge', views.add_semantic_edge, name='add_semantic_edge'),
+    path('semantic-edge/delete', views.delete_semantic_edge, name='delete_semantic_edge'),
+    # поиск
+    path('search/', views.search_concepts, name='search_concepts'),
+    # Загрузка данных
+    path('load-concepts/', views.load_concepts, name='load_concepts'),
+    path('load-test-data/', views.load_test_data, name='load_test_data'),
 ]
